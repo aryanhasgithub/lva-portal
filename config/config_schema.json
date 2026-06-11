@@ -1,0 +1,25 @@
+{
+  "general": [
+    { "key": "NAME", "label": "Client Name", "type": "string", "default": "speaker_livingroom" },
+    { "key": "PORT", "label": "API Port", "type": "number", "default": "6053" },
+    { "key": "ENABLE_DEBUG", "label": "Debug Mode", "type": "bool", "default": "0" },
+    { "key": "ENABLE_OUTPUT_ONLY", "label": "Output Only Mode", "type": "bool", "default": "0" },
+    { "key": "MIC_AUTO_GAIN", "label": "Mic Auto Gain", "type": "range", "min": 0, "max": 31, "default": "0" },
+    { "key": "MIC_NOISE_SUPPRESSION", "label": "Mic Noise Suppress", "type": "range", "min": 0, "max": 4, "default": "0" },
+    { "key": "WAKE_MODEL", "label": "Wake Word Model", "type": "string", "default": "okay_nabu" },
+    { "key": "STOP_MODEL", "label": "Stop Word Model", "type": "string", "default": "stop" },
+    { "key": "WAKE_WORD_DIR", "label": "Wake Word Path", "type": "string", "default": "app/wakewords" },
+    { "key": "ENABLE_THINKING_SOUND", "label": "Thinking Sound", "type": "bool", "default": "1" },
+    { "key": "REFRACTORY_SECONDS", "label": "Refactory Delay (s)", "type": "number", "default": "2" },
+    { "key": "TIMER_MAX_RING_SECONDS", "label": "Max Ring Time (s)", "type": "number", "default": "900" },
+    { "key": "WAKEUP_SOUND", "label": "Wake Sound", "type": "string", "default": "sounds/wake_word_triggered.flac" },
+    { "key": "PROCESSING_SOUND", "label": "Processing Sound", "type": "string", "default": "sounds/processing.wav" },
+    { "key": "TIMER_FINISHED_SOUND", "label": "Timer Sound", "type": "string", "default": "sounds/timer_finished.flac" },
+    { "key": "MUTE_SOUND", "label": "Mute Sound", "type": "string", "default": "sounds/mute_switch_on.flac" },
+    { "key": "UNMUTE_SOUND", "label": "Unmute Sound", "type": "string", "default": "sounds/mute_switch_off.flac" }
+  ],
+  "audio": [
+    { "key": "AUDIO_INPUT_DEVICE", "label": "Input Device", "type": "list", "options": [], "default": "default" },
+    { "key": "AUDIO_OUTPUT_DEVICE", "label": "Output Device", "type": "list", "options": [], "default": "default" }
+  ]
+}

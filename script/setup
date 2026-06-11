@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+import subprocess
+import venv
+from pathlib import Path
+
+_DIR = Path(__file__).parent
+_VENV_DIR = _DIR.parent / ".venv"
+_REQUIREMENTS = _DIR.parent / "requirements.txt"
+
+print(">>> Creating virtual environment...")
+builder = venv.EnvBuilder(with_pip=True)
+context = builder.ensure_directories(_VENV_DIR)
+builder.create(_VENV_DIR)
+
+pip = [context.env_exe, "-m", "pip"]
+
+print(">>> Upgrading pip...")
+subprocess.check_call(pip + ["install", "--upgrade", "pip"])
+subprocess.check_call(pip + ["install", "--upgrade", "setuptools", "wheel"])
+
+print(">>> Installing dependencies...")
+subprocess.check_call(pip + ["install", "-r", str(_REQUIREMENTS)])
+
+print(">>> Setup complete!")
+print(f">>> Venv: {_VENV_DIR}")

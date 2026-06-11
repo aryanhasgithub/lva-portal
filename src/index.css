@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+@theme {
+  /* --- Core Surface & Background --- */
+  --color-background: var(--background);
+  --color-on-background: var(--on-background);
+  --color-surface: var(--surface);
+  --color-on-surface: var(--on-surface);
+  --color-surface-variant: var(--surface-variant);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-surface-tint: var(--surface-tint);
+
+  /* --- Surface Containers (MD3 Elevation) --- */
+  --color-surface-dim: var(--surface-dim);
+  --color-surface-bright: var(--surface-bright);
+  --color-surface-container-lowest: var(--surface-container-lowest);
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+
+  /* --- Primary (The "Black One" identity) --- */
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
+  --color-primary-fixed: var(--primary-fixed);
+  --color-primary-fixed-dim: var(--primary-fixed-dim);
+  --color-on-primary-fixed: var(--on-primary-fixed);
+  --color-on-primary-fixed-variant: var(--on-primary-fixed-variant);
+
+  /* --- Secondary --- */
+  --color-secondary: var(--secondary);
+  --color-on-secondary: var(--on-secondary);
+  --color-secondary-container: var(--secondary-container);
+  --color-on-secondary-container: var(--on-secondary-container);
+
+  /* --- Tertiary --- */
+  --color-tertiary: var(--tertiary);
+  --color-on-tertiary: var(--on-tertiary);
+  --color-tertiary-container: var(--tertiary-container);
+  --color-on-tertiary-container: var(--on-tertiary-container);
+
+  /* --- Inverse Roles --- */
+  --color-inverse-surface: var(--inverse-surface);
+  --color-inverse-on-surface: var(--inverse-on-surface);
+  --color-inverse-primary: var(--inverse-primary);
+
+  /* --- Utility & Feedback --- */
+  --color-error: var(--error);
+  --color-on-error: var(--on-error);
+  --color-error-container: var(--error-container);
+  --color-on-error-container: var(--on-error-container);
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+  --color-shadow: var(--shadow);
+  --color-scrim: var(--scrim);
+}
+
+:root {
+  /* --- LIGHT SCHEME (Standard Contrast) --- */
+  --background: #FBF8FB; /* */
+  --on-background: #1B1B1D; /* */
+  --surface: #FBF8FB; /* */
+  --on-surface: #1B1B1D; /* */
+  --surface-variant: #E2E2EA; /* */
+  --on-surface-variant: #45464D; /* */
+  --surface-tint: #535E7B; /*[cite: 1] */
+
+  --surface-dim: #DCD9DC; /*[cite: 1] */
+  --surface-bright: #FBF8FB; /*[cite: 1] */
+  --surface-container-lowest: #FFFFFF; /*[cite: 1] */
+  --surface-container-low: #F5F3F5; /*[cite: 1] */
+  --surface-container: #F0EDF0; /*[cite: 1] */
+  --surface-container-high: #EAE7EA; /*[cite: 1] */
+  --surface-container-highest: #E4E2E4; /*[cite: 1] */
+
+  --primary: #000000; /*[cite: 1] */
+  --on-primary: #FFFFFF; /*[cite: 1] */
+  --primary-container: #0F1B34; /*[cite: 1] */
+  --on-primary-container: #7883A2; /*[cite: 1] */
+  --primary-fixed: #D9E2FF; /*[cite: 1] */
+  --primary-fixed-dim: #BBC6E7; /*[cite: 1] */
+  --on-primary-fixed: #0F1B34; /*[cite: 1] */
+  --on-primary-fixed-variant: #3B4662; /*[cite: 1] */
+
+  --secondary: #5A5E6B; /*[cite: 1] */
+  --on-secondary: #FFFFFF; /*[cite: 1] */
+  --secondary-container: #DFE2F1; /*[cite: 1] */
+  --on-secondary-container: #606471; /*[cite: 1] */
+
+  --tertiary: #000000; /*[cite: 1] */
+  --on-tertiary: #FFFFFF; /*[cite: 1] */
+  --tertiary-container: #27142D; /*[cite: 1] */
+  --on-tertiary-container: #957B9A; /*[cite: 1] */
+
+  --inverse-surface: #303032; /*[cite: 1] */
+  --inverse-on-surface: #F3F0F2; /*[cite: 1] */
+  --inverse-primary: #BBC6E7; /*[cite: 1] */
+
+  --error: #BA1A1A; /*[cite: 1] */
+  --on-error: #FFFFFF; /*[cite: 1] */
+  --error-container: #FFDAD6; /*[cite: 1] */
+  --on-error-container: #93000A; /*[cite: 1] */
+  --outline: #76777E; /*[cite: 1] */
+  --outline-variant: #C6C6CE; /*[cite: 1] */
+  --shadow: #000000; /*[cite: 1] */
+  --scrim: #000000; /*[cite: 1] */
+
+  /* --- DARK SCHEME (Standard Contrast) --- */
+  @media (prefers-color-scheme: dark) {
+    --background: #131315; /*[cite: 1] */
+    --on-background: #E4E2E4; /*[cite: 1] */
+    --surface: #131315; /*[cite: 1] */
+    --on-surface: #E4E2E4; /*[cite: 1] */
+    --surface-variant: #45464D; /*[cite: 1] */
+    --on-surface-variant: #C6C6CE; /*[cite: 1] */
+    --surface-tint: #BBC6E7; /*[cite: 1] */
+
+    --surface-dim: #131315; /*[cite: 1] */
+    --surface-bright: #39393B; /*[cite: 1] */
+    --surface-container-lowest: #0E0E10; /*[cite: 1] */
+    --surface-container-low: #1B1B1D; /*[cite: 1] */
+    --surface-container: #1F1F21; /*[cite: 1] */
+    --surface-container-high: #2A2A2C; /*[cite: 1] */
+    --surface-container-highest: #353437; /*[cite: 1] */
+
+    --primary: #BBC6E7; /*[cite: 1] */
+    --on-primary: #25304A; /*[cite: 1] */
+    --primary-container: #0B1730; /*[cite: 1] */
+    --on-primary-container: #76819F; /*[cite: 1] */
+
+    --secondary: #C3C6D4; /*[cite: 1] */
+    --on-secondary: #2C303B; /*[cite: 1] */
+    --secondary-container: #454955; /*[cite: 1] */
+    --on-secondary-container: #B5B8C6; /*[cite: 1] */
+
+    --tertiary: #DBBDDF; /*[cite: 1] */
+    --on-tertiary: #3E2943; /*[cite: 1] */
+    --tertiary-container: #231029; /*[cite: 1] */
+    --on-tertiary-container: #927897; /*[cite: 1] */
+
+    --inverse-surface: #E4E2E4; /*[cite: 1] */
+    --inverse-on-surface: #303032; /*[cite: 1] */
+    --inverse-primary: #535E7B; /*[cite: 1] */
+
+    --error: #FFB4AB; /*[cite: 1] */
+    --on-error: #690005; /*[cite: 1] */
+    --error-container: #93000A; /*[cite: 1] */
+    --on-error-container: #FFDAD6; /*[cite: 1] */
+    --outline: #8F9098; /*[cite: 1] */
+    --outline-variant: #45464D; /*[cite: 1] */
+  }
+}
