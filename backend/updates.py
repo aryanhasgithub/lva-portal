@@ -124,7 +124,7 @@ async def check_updates():
         print(f"[UPDATES ERROR] fetching /updates: {err}")
         versions = []
 
-    portal, core, audio, os_status = await asyncio.gather(
+    portal, core, audio, cli, os_status = await asyncio.gather(
         _get_container_status(
             "lva-portal", "LVA Portal", "aryanhasgithub/lva-portal", versions
         ),
@@ -134,9 +134,12 @@ async def check_updates():
         _get_container_status(
             "lva-audio", "LVA Audio", "aryanhasgithub/lva-audio", versions
         ),
+        _get_container_status(
+            "lva-cli", "LVA CLI", "aryanhasgithub/lva-cli", versions
+        ),
         _get_os_status(),
     )
-    return {"portal": portal, "core": core, "audio": audio, "os": os_status}
+    return {"portal": portal, "core": core, "audio": audio, "cli": cli, "os": os_status}
 
 
 @router.get("/update/stream")

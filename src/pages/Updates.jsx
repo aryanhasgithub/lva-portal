@@ -284,7 +284,7 @@ const Updates = () => {
         <div>
           <p className="text-on-surface text-3xl font-bold">System Updates</p>
           <p className="text-on-surface-variant mt-1 text-sm">
-            Manage LVA Core, Portal, Audio &amp; OS versions
+            Manage LVA Core, Portal, Audio, CLI, &amp; OS versions
           </p>
         </div>
         <button
@@ -305,7 +305,7 @@ const Updates = () => {
 
         {loading ? (
           <div className="space-y-4 animate-pulse">
-            {[...Array(4)].map((_, i) => (
+            {[...Array(5)].map((_, i) => (
               <div key={i} className="h-40 bg-surface-container rounded-3xl border border-outline-variant" />
             ))}
           </div>
@@ -314,6 +314,7 @@ const Updates = () => {
             <UpdateCard data={updates?.portal} updatingId={updatingId} onUpdate={handleUpdate} pullPct={pullPct} />
             <UpdateCard data={updates?.core}   updatingId={updatingId} onUpdate={handleUpdate} pullPct={pullPct} />
             <UpdateCard data={updates?.audio}  updatingId={updatingId} onUpdate={handleUpdate} pullPct={pullPct} />
+             <UpdateCard data={updates?.cli}  updatingId={updatingId} onUpdate={handleUpdate} pullPct={pullPct} />
             <UpdateCard data={updates?.os}     updatingId={updatingId} onUpdate={handleUpdate} pullPct={pullPct} />
           </>
         )}
