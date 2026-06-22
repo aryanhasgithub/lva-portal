@@ -19,7 +19,10 @@ _UNAVAILABLE = {"error": "Supervisor unavailable", "devices": [], "hostname": "u
 @router.get("/info")
 async def network_info():
     try:
-        return await supervisor_get("/network/info")
+        data = await supervisor_get("/network/info")
+        devices = data if isinstance(data, list) else data.get("devices", [])
+        hostname = data.get("hostname", "") if isinstance(data, dict) else ""
+        return {"devices": devices, "hostname": hostname}
     except Exception as err:  # pylint: disable=broad-exception-caught
         _LOGGER.warning("network/info unavailable: %s", err)
         return _UNAVAILABLE

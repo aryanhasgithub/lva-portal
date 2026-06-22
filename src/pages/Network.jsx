@@ -62,16 +62,16 @@ const Network = () => {
   }
 
   const loadDetail = async (iface) => {
-    try {
-      const res = await fetch(`${API_BASE}/network/info`)
-      const data = await res.json()
-      const devices = Array.isArray(data) ? data : data.devices || []
-      const found = devices.find(d => d.interface === iface)
-      setDetail(found || null)
-    } catch (e) {
-      console.error("Failed to load interface detail:", e)
-    }
+  try {
+    const res = await fetch(`${API_BASE}/network/info`)
+    const data = await res.json()
+    const devices = data.devices || []
+    const found = devices.find(d => d.interface === iface)
+    setDetail(found || null)
+  } catch (e) {
+    console.error("Failed to load interface detail:", e)
   }
+ }
 
   useEffect(() => { load() }, [])
   useEffect(() => { if (selected) loadDetail(selected) }, [selected])
