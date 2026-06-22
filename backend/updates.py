@@ -9,7 +9,8 @@ The JSX expects:
             audio: ComponentStatus, os: OSStatus }
 
   GET  /api/system/update/stream?component=<name>
-        → SSE stream of { type: "log"|"success"|"error", message: str }
+        → SSE stream of { type: "log"|"success"|"error", status: str,
+                          pull_percent?: int }
 """
 
 import asyncio
@@ -25,8 +26,8 @@ from supervisor_client import supervisor_get, supervisor_post
 router = APIRouter(prefix="/api/system", tags=["updates"])
 
 
-def _sse(event_type: str, message: str) -> str:
-    return f"data: {json.dumps({'type': event_type, 'message': message})}\n\n"
+def _sse(payload: dict) -> str:
+    return f"data: {json.dumps(payload)}\n\n"
 
 
 # =============================================================================
@@ -40,10 +41,6 @@ async def _get_container_status(
     repo: str,
     versions: list[dict],
 ) -> dict:
-    """Build a ComponentStatus dict from supervisor /updates response.
-
-    Receives the already-fetched versions list to avoid one API call per card.
-    """
     for item in versions:
         if item.get("name") == name:
             local_ver = item.get("local_version") or "unknown"
@@ -64,7 +61,6 @@ async def _get_container_status(
                 "action": "container_update",
             }
 
-    # Not found in supervisor response — return safe fallback
     return {
         "id": name,
         "name": display_name,
@@ -79,7 +75,6 @@ async def _get_container_status(
 
 
 async def _get_os_status() -> dict:
-    """Get OS update status from supervisor /updates/os."""
     try:
         data = await supervisor_get("/updates/os")
         return {
@@ -123,9 +118,7 @@ async def _get_os_status() -> dict:
 
 @router.get("/updates")
 async def check_updates():
-    """Return update status for all components including OS."""
     try:
-        # Single call to supervisor — share the result across all four cards
         versions: list[dict] = await supervisor_get("/updates")
     except Exception as err:  # pylint: disable=broad-exception-caught
         print(f"[UPDATES ERROR] fetching /updates: {err}")
@@ -143,61 +136,56 @@ async def check_updates():
         ),
         _get_os_status(),
     )
-    return {
-        "portal": portal,
-        "core": core,
-        "audio": audio,
-        "os": os_status,
-    }
+    return {"portal": portal, "core": core, "audio": audio, "os": os_status}
 
 
 @router.get("/update/stream")
 async def trigger_update_stream(component: str):
     """SSE stream for container or OS updates.
 
-    Streams granular progress messages from the supervisor so the terminal
-    panel in the JSX shows each step (pull, stop, remove, start) in real time.
-
-    Query params:
-      component: container name ("lva-audio", "lva", "lva-portal") or "os"
+    For container updates, proxies the supervisor's own SSE stream
+    verbatim — the supervisor now emits full JSON dicts including
+    pull_percent, so we forward the whole payload unchanged rather
+    than mapping it to a {type, message} shape, which would drop
+    the pull_percent field the JSX uses for the progress bar.
     """
 
     async def _stream() -> AsyncGenerator[str, None]:
-        yield _sse("log", f"Starting update for {component}...")
+        yield _sse({"type": "log", "status": f"Starting update for {component}..."})
 
         # ── OS update ────────────────────────────────────────────────────────
         if component == "os":
-            yield _sse("log", "Fetching OS bundle URL from GitHub...")
+            yield _sse({"type": "log", "status": "Fetching OS bundle URL from GitHub..."})
             try:
                 os_info = await supervisor_get("/updates/os")
                 if not os_info.get("bundle_url"):
-                    yield _sse("error", "No bundle available for this machine.")
+                    yield _sse({"type": "error", "status": "No bundle available for this machine."})
                     return
 
-                yield _sse(
-                    "log",
-                    f"Bundle found: {os_info['tag']} for {os_info.get('machine', '?')}",
-                )
-                yield _sse(
-                    "log",
-                    "Downloading bundle and handing to RAUC — this may take a few minutes...",
-                )
+                yield _sse({
+                    "type": "log",
+                    "status": f"Bundle found: {os_info['tag']} for {os_info.get('machine', '?')}",
+                })
+                yield _sse({
+                    "type": "log",
+                    "status": "Downloading bundle and handing to RAUC — this may take a few minutes...",
+                })
 
                 result = await supervisor_post(
                     "/system/os-update",
                     json={"bundle_url": os_info["bundle_url"]}
                 )
                 if result.get("result") == "ok":
-                    yield _sse("success", "OS update installed. Reboot to apply.")
+                    yield _sse({"type": "success", "status": "OS update installed. Reboot to apply."})
                 else:
-                    yield _sse("error", result.get("error", "OS update failed."))
+                    yield _sse({"type": "error", "status": result.get("error", "OS update failed.")})
             except Exception as err:  # pylint: disable=broad-exception-caught
-                yield _sse("error", str(err))
+                yield _sse({"type": "error", "status": str(err)})
             return
 
-        # ── Container update (streamed progress via supervisor SSE) ──────────
-        # The supervisor's POST /updates/update now calls container.update(progress=...)
-        # which emits SSE progress lines. We proxy them here.
+        # ── Container update — proxy supervisor SSE verbatim ─────────────────
+        # The supervisor emits {"type", "status", "pull_percent"?} dicts.
+        # Forward the whole payload so pull_percent reaches the JSX.
         try:
             import httpx
 
@@ -212,22 +200,22 @@ async def trigger_update_stream(component: str):
                     f"/containers/{component}/update/stream",
                 ) as resp:
                     if resp.status_code != 200:
-                        yield _sse("error", f"Supervisor returned {resp.status_code}")
+                        yield _sse({"type": "error", "status": f"Supervisor returned {resp.status_code}"})
                         return
 
                     async for raw_line in resp.aiter_lines():
                         if not raw_line.startswith("data:"):
                             continue
                         try:
+                            # Forward the full supervisor payload unchanged —
+                            # pull_percent is already in there, don't strip it.
                             payload = json.loads(raw_line[5:].strip())
-                            yield _sse(
-                                payload.get("type", "log"), payload.get("message", "")
-                            )
+                            yield f"data: {json.dumps(payload)}\n\n"
                         except json.JSONDecodeError:
-                            yield _sse("log", raw_line)
+                            yield _sse({"type": "log", "status": raw_line})
 
         except Exception as err:  # pylint: disable=broad-exception-caught
-            yield _sse("error", str(err))
+            yield _sse({"type": "error", "status": str(err)})
 
     return StreamingResponse(
         _stream(),
@@ -238,7 +226,6 @@ async def trigger_update_stream(component: str):
 
 @router.post("/{action}")
 async def system_power(action: str):
-    """Reboot or poweroff via supervisor."""
     if action not in ("reboot", "poweroff"):
         return {"status": "error", "detail": "Invalid action"}
     try:
