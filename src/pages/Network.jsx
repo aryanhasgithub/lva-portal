@@ -136,7 +136,7 @@ const Network = () => {
   if (loading) return <div className="p-10 text-on-surface animate-pulse">Loading Network...</div>
 
   return (
-    <div className="p-4 md:p-8 h-full flex flex-col gap-6 overflow-hidden">
+    <div className="p-4 md:p-8 h-full flex flex-col gap-6 overflow-y-auto custom-scrollbar">
 
       {/* Header */}
       <div className="w-full flex justify-between items-end flex-none h-14">
