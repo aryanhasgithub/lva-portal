@@ -6,7 +6,8 @@ Maps old portal update API to new supervisor endpoints.
 The JSX expects:
   GET  /api/system/updates
         → { portal: ComponentStatus, core: ComponentStatus,
-            audio: ComponentStatus, os: OSStatus }
+            audio: ComponentStatus, cli: ComponentStatus,
+            supervisor: ComponentStatus, os: OSStatus }
 
   GET  /api/system/update/stream?component=<name>
         → SSE stream of { type: "log"|"success"|"error", status: str,
@@ -24,6 +25,15 @@ import urllib.request
 from supervisor_client import supervisor_get, supervisor_post
 
 router = APIRouter(prefix="/api/system", tags=["updates"])
+
+# Components proxied through the supervisor's generic per-container SSE
+# update route (GET /containers/{name}/update/stream). "lva-supervisor"
+# is deliberately excluded — it's handled by its own branch in
+# trigger_update_stream() below, via the dedicated
+# POST /updates/supervisor/update endpoint, since the supervisor cannot
+# safely stream its own update the way the other containers do (see that
+# branch's comments).
+CONTAINER_UPDATE_COMPONENTS = {"lva-portal", "lva", "lva-audio", "lva-cli"}
 
 
 def _sse(payload: dict) -> str:
@@ -124,7 +134,7 @@ async def check_updates():
         print(f"[UPDATES ERROR] fetching /updates: {err}")
         versions = []
 
-    portal, core, audio, cli, os_status = await asyncio.gather(
+    portal, core, audio, cli, supervisor, os_status = await asyncio.gather(
         _get_container_status(
             "lva-portal", "LVA Portal", "aryanhasgithub/lva-portal", versions
         ),
@@ -137,20 +147,43 @@ async def check_updates():
         _get_container_status(
             "lva-cli", "LVA CLI", "aryanhasgithub/lva-cli", versions
         ),
+        _get_container_status(
+            "lva-supervisor",
+            "LVA Supervisor",
+            "aryanhasgithub/lva-supervisor",
+            versions,
+        ),
         _get_os_status(),
     )
-    return {"portal": portal, "core": core, "audio": audio, "cli": cli, "os": os_status}
+    return {
+        "portal": portal,
+        "core": core,
+        "audio": audio,
+        "cli": cli,
+        "supervisor": supervisor,
+        "os": os_status,
+    }
 
 
 @router.get("/update/stream")
 async def trigger_update_stream(component: str):
-    """SSE stream for container or OS updates.
+    """SSE stream for container, supervisor, or OS updates.
 
-    For container updates, proxies the supervisor's own SSE stream
-    verbatim — the supervisor now emits full JSON dicts including
-    pull_percent, so we forward the whole payload unchanged rather
-    than mapping it to a {type, message} shape, which would drop
-    the pull_percent field the JSX uses for the progress bar.
+    For the four regular containers, proxies the supervisor's own SSE
+    stream verbatim — the supervisor emits full JSON dicts including
+    pull_percent, so we forward the whole payload unchanged rather than
+    mapping it to a {type, message} shape, which would drop the
+    pull_percent field the JSX uses for the progress bar.
+
+    The supervisor's own update is handled separately: it cannot stream
+    live progress the way the other containers do, since the update
+    calls exit_system() partway through, which triggers a process
+    restart on its own schedule rather than returning a clean
+    completion event mid-stream. Instead we fire the dedicated
+    POST /updates/supervisor/update, which starts the update as a
+    background task on the supervisor side, and report success once
+    that call returns "started" — not once the update has actually
+    finished, since there's no live stream to confirm that over.
     """
 
     async def _stream() -> AsyncGenerator[str, None]:
@@ -184,6 +217,35 @@ async def trigger_update_stream(component: str):
                     yield _sse({"type": "error", "status": result.get("error", "OS update failed.")})
             except Exception as err:  # pylint: disable=broad-exception-caught
                 yield _sse({"type": "error", "status": str(err)})
+            return
+
+        # ── Supervisor self-update — dedicated non-streaming path ────────────
+        # Do NOT fall through to the generic container proxy below: the
+        # supervisor's own /containers/lva-supervisor/update/stream route
+        # is not meant to be reached this way (it self-updates via a
+        # separate mechanism entirely). Always go through
+        # /updates/supervisor/update instead.
+        if component == "lva-supervisor":
+            yield _sse({"type": "log", "status": "Starting supervisor self-update..."})
+            try:
+                result = await supervisor_post("/updates/supervisor/update")
+                if result.get("result") == "started":
+                    yield _sse({
+                        "type": "success",
+                        "status": "Supervisor update started — it will restart shortly.",
+                    })
+                else:
+                    yield _sse({
+                        "type": "error",
+                        "status": result.get("error", "Failed to start supervisor update."),
+                    })
+            except Exception as err:  # pylint: disable=broad-exception-caught
+                yield _sse({"type": "error", "status": str(err)})
+            return
+
+        # ── Unknown / unsupported component ───────────────────────────────
+        if component not in CONTAINER_UPDATE_COMPONENTS:
+            yield _sse({"type": "error", "status": f"Unknown or unsupported component '{component}'"})
             return
 
         # ── Container update — proxy supervisor SSE verbatim ─────────────────

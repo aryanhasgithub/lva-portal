@@ -313,6 +313,7 @@ const Updates = () => {
           <>
             <UpdateCard data={updates?.portal} updatingId={updatingId} onUpdate={handleUpdate} pullPct={pullPct} />
             <UpdateCard data={updates?.core}   updatingId={updatingId} onUpdate={handleUpdate} pullPct={pullPct} />
+            <UpdateCard data={updates?.supervisor} updatingId={updatingId} onUpdate={handleUpdate} pullPct={pullPct} />
             <UpdateCard data={updates?.audio}  updatingId={updatingId} onUpdate={handleUpdate} pullPct={pullPct} />
              <UpdateCard data={updates?.cli}  updatingId={updatingId} onUpdate={handleUpdate} pullPct={pullPct} />
             <UpdateCard data={updates?.os}     updatingId={updatingId} onUpdate={handleUpdate} pullPct={pullPct} />
