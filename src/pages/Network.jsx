@@ -32,9 +32,8 @@ const SectionHeader = ({ icon, title }) => (
 
 const Network = () => {
   const [loading, setLoading] = useState(true)
-  const [interfaces, setInterfaces] = useState([])
+  const [devices, setDevices] = useState([])
   const [selected, setSelected] = useState(null)
-  const [detail, setDetail] = useState(null)
   const [hostname, setHostname] = useState("")
   const [newHostname, setNewHostname] = useState("")
   const [ipForm, setIpForm] = useState({ method: "dhcp", address: "", prefix: "24", gateway: "", dns: "1.1.1.1, 8.8.8.8" })
@@ -45,15 +44,15 @@ const Network = () => {
 
   const load = async () => {
     try {
-      const [ifaceRes, infoRes] = await Promise.all([
-        fetch(`${API_BASE}/network/interfaces`),
-        fetch(`${API_BASE}/network/info`),
-      ])
-      const ifaces = await ifaceRes.json()
-      const info = await infoRes.json()
-      setInterfaces(ifaces)
-      if (info.hostname) setHostname(info.hostname)
-      if (!selected && ifaces.length > 0) setSelected(ifaces[0].interface)
+      const res = await fetch(`${API_BASE}/network/info`)
+      const data = await res.json()
+      const list = data.devices || []
+      setDevices(list)
+      if (data.hostname) setHostname(data.hostname)
+      setSelected(prev => {
+        if (prev && list.some(d => d.interface === prev)) return prev
+        return list.length > 0 ? list[0].interface : null
+      })
     } catch (e) {
       console.error("Failed to load network info:", e)
     } finally {
@@ -61,20 +60,12 @@ const Network = () => {
     }
   }
 
-  const loadDetail = async (iface) => {
-  try {
-    const res = await fetch(`${API_BASE}/network/info`)
-    const data = await res.json()
-    const devices = data.devices || []
-    const found = devices.find(d => d.interface === iface)
-    setDetail(found || null)
-  } catch (e) {
-    console.error("Failed to load interface detail:", e)
-  }
- }
-
   useEffect(() => { load() }, [])
-  useEffect(() => { if (selected) loadDetail(selected) }, [selected])
+
+  // Derived, not fetched — the backend already sends address/prefix/
+  // gateway/dns/mac flattened onto each device, so no second request
+  // or nested found.ip4.* lookup is needed here.
+  const detail = devices.find(d => d.interface === selected) || null
 
   const handleHostname = async () => {
     if (!newHostname.trim()) return
@@ -118,7 +109,7 @@ const Network = () => {
       })
       if (!res.ok) throw new Error()
       setStatusText("Done!")
-      await loadDetail(selected)
+      await load()
       setTimeout(() => { setIpSaving(false); setStatusText("Apply") }, 1500)
     } catch {
       setStatusText("Error")
@@ -156,10 +147,10 @@ const Network = () => {
         <div className="bg-surface-container rounded-3xl border border-outline-variant flex flex-col overflow-hidden shadow-sm">
           <SectionHeader icon="device_hub" title="Interfaces" />
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 custom-scrollbar">
-            {interfaces.length === 0 && (
+            {devices.length === 0 && (
               <p className="text-on-surface-variant text-sm p-4 text-center">No interfaces found</p>
             )}
-            {interfaces.map(iface => (
+            {devices.map(iface => (
               <button
                 key={iface.interface}
                 onClick={() => setSelected(iface.interface)}
