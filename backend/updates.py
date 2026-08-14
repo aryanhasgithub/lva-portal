@@ -207,14 +207,72 @@ async def trigger_update_stream(component: str):
                     "status": "Downloading bundle and handing to RAUC — this may take a few minutes...",
                 })
 
-                result = await supervisor_post(
-                    "/system/os-update",
-                    json={"bundle_url": os_info["bundle_url"]}
+                # /system/os-update blocks server-side for up to 10 minutes
+                # with no progress reporting of its own (a single RAUC
+                # install() call, no percent/streaming). Run it as a
+                # background task and emit periodic heartbeats so the SSE
+                # connection doesn't look dead for the whole duration.
+                install_task = asyncio.ensure_future(
+                    supervisor_post(
+                        "/system/os-update", json={"bundle_url": os_info["bundle_url"]}
+                    )
                 )
-                if result.get("result") == "ok":
-                    yield _sse({"type": "success", "status": "OS update installed. Reboot to apply."})
-                else:
-                    yield _sse({"type": "error", "status": result.get("error", "OS update failed.")})
+
+                elapsed = 0
+                while not install_task.done():
+                    await asyncio.sleep(30)
+                    elapsed += 30
+                    yield _sse({
+                        "type": "log",
+                        "status": f"Still installing... ({elapsed}s elapsed)",
+                    })
+
+                result = install_task.result()
+                if result.get("result") != "ok":
+                    yield _sse({
+                        "type": "error",
+                        "status": result.get("error", "OS update failed."),
+                    })
+                    return
+
+                yield _sse({
+                    "type": "log",
+                    "status": "Update installed successfully. Rebooting now...",
+                })
+
+                try:
+                    reboot_result = await supervisor_post("/system/reboot")
+                except Exception as err:  # pylint: disable=broad-exception-caught
+                    # The install itself succeeded — a failed reboot call
+                    # just means the user needs to reboot manually, not
+                    # that the update failed.
+                    yield _sse({
+                        "type": "success",
+                        "status": (
+                            "Update installed, but the automatic reboot "
+                            f"could not be triggered ({err}). Please reboot manually."
+                        ),
+                    })
+                    return
+
+                if reboot_result.get("status") == "error":
+                    yield _sse({
+                        "type": "success",
+                        "status": (
+                            "Update installed, but the automatic reboot "
+                            f"failed ({reboot_result.get('detail', 'unknown error')}). "
+                            "Please reboot manually."
+                        ),
+                    })
+                    return
+
+                # The device is going down for reboot right about now — this
+                # is the last event the client will reliably receive, same
+                # as the supervisor self-update's stream.
+                yield _sse({
+                    "type": "success",
+                    "status": "Update installed. Rebooting to apply — the device will be back shortly.",
+                })
             except Exception as err:  # pylint: disable=broad-exception-caught
                 yield _sse({"type": "error", "status": str(err)})
             return
