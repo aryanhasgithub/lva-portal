@@ -69,6 +69,9 @@ async def _get_container_status(
                 ),
                 "url": f"https://github.com/{repo}",
                 "action": "container_update",
+                "requires": item.get("requires") or {},
+                "requirements_met": item.get("requirements_met", True),
+                "unmet_requirements": item.get("unmet_requirements") or {},
             }
 
     return {
@@ -81,6 +84,9 @@ async def _get_container_status(
         "notes": "",
         "url": f"https://github.com/{repo}",
         "action": "container_update",
+        "requires": {},
+        "requirements_met": True,
+        "unmet_requirements": {},
     }
 
 

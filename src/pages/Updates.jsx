@@ -15,12 +15,52 @@ const ProgressBar = ({ pct }) => (
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Toast — simple auto-dismissing notification, stacked bottom-right
+// ─────────────────────────────────────────────────────────────────────────────
+const Toast = ({ toast, onDismiss }) => {
+  useEffect(() => {
+    const t = setTimeout(() => onDismiss(toast.id), 6000)
+    return () => clearTimeout(t)
+  }, [toast.id, onDismiss])
+
+  return (
+    <div
+      className="pointer-events-auto max-w-sm w-full rounded-2xl border shadow-lg px-5 py-4
+                 bg-surface-container-high border-outline-variant flex items-start gap-3
+                 animate-[fadeIn_0.2s_ease-out]"
+    >
+      <span className="material-symbols-outlined text-amber-500 mt-0.5">warning</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-on-surface">{toast.title}</p>
+        {toast.message && (
+          <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">{toast.message}</p>
+        )}
+      </div>
+      <button
+        onClick={() => onDismiss(toast.id)}
+        className="text-on-surface-variant/50 hover:text-on-surface-variant shrink-0"
+      >
+        <span className="material-symbols-outlined text-[18px]">close</span>
+      </button>
+    </div>
+  )
+}
+
+const ToastStack = ({ toasts, onDismiss }) => (
+  <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
+    {toasts.map(t => <Toast key={t.id} toast={t} onDismiss={onDismiss} />)}
+  </div>
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
 // UpdateCard
 // ─────────────────────────────────────────────────────────────────────────────
 const UpdateCard = ({ data, onUpdate, updatingId, pullPct }) => {
   if (!data) return null
 
   const isUpdating = updatingId === data.id
+  const requirementsMet = data.requirements_met !== false
+  const blocked = data.available && !requirementsMet
 
   return (
     <div className={`rounded-3xl border shadow-sm transition-all flex flex-col overflow-hidden
@@ -67,6 +107,14 @@ const UpdateCard = ({ data, onUpdate, updatingId, pullPct }) => {
                   </>
                 )}
               </div>
+
+              {/* Unmet requirements chip */}
+              {blocked && (
+                <div className="mt-2 flex items-center gap-1.5 text-amber-600 text-xs font-bold">
+                  <span className="material-symbols-outlined text-[14px]">lock</span>
+                  <span>Requires other updates first</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -75,14 +123,15 @@ const UpdateCard = ({ data, onUpdate, updatingId, pullPct }) => {
             {data.available ? (
               <button
                 onClick={() => onUpdate(data)}
-                disabled={!!updatingId}
+                disabled={!!updatingId || blocked}
+                title={blocked ? 'Update dependencies before installing this update' : undefined}
                 className="h-10 px-6 bg-primary text-on-primary rounded-full font-bold shadow-md
                            hover:shadow-lg active:scale-95 flex items-center gap-2 transition-all
                            w-full md:w-auto justify-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isUpdating ? 'Installing…' : 'Install Update'}
+                {isUpdating ? 'Installing…' : (blocked ? 'Locked' : 'Install Update')}
                 <span className={`material-symbols-outlined ${isUpdating ? 'animate-spin' : ''}`}>
-                  {isUpdating ? 'sync' : 'download'}
+                  {isUpdating ? 'sync' : (blocked ? 'lock' : 'download')}
                 </span>
               </button>
             ) : (
@@ -197,8 +246,18 @@ const Updates = () => {
   const [updateFailed, setUpdateFailed] = useState(false)
   const [logs,         setLogs]         = useState([])
   const [pullPct,      setPullPct]      = useState(null)  // null = not pulling / no % yet
+  const [toasts,       setToasts]       = useState([])
 
   const sseRef = useRef(null)
+  const toastIdRef = useRef(0)
+
+  const pushToast = (title, message) => {
+    const id = ++toastIdRef.current
+    setToasts(prev => [...prev, { id, title, message }])
+  }
+
+  const dismissToast = (id) =>
+    setToasts(prev => prev.filter(t => t.id !== id))
 
   const checkUpdates = async () => {
     setLoading(true)
@@ -206,6 +265,21 @@ const Updates = () => {
       const res  = await fetch(`${API_BASE}/system/updates`)
       const data = await res.json()
       setUpdates(data)
+
+      // Surface a toast for any available update that's blocked on
+      // dependency versions, so it's noticed even without opening the card.
+      Object.values(data || {}).forEach(component => {
+        if (component?.available && component?.requirements_met === false) {
+          const unmet = component.unmet_requirements || {}
+          const parts = Object.entries(unmet).map(
+            ([dep, info]) => `${dep} ≥ ${info.required} (currently ${info.current ?? 'unknown'})`
+          )
+          pushToast(
+            `${component.name} update requires other components first`,
+            parts.length ? `Needs: ${parts.join(', ')}` : undefined
+          )
+        }
+      })
     } catch (err) {
       console.error('[Updates] fetch error:', err)
     } finally {
@@ -221,6 +295,20 @@ const Updates = () => {
 
   const handleUpdate = (componentData) => {
     if (updatingId) return
+
+    // Defensive: the button is disabled when requirements aren't met, but
+    // guard here too in case this is ever invoked another way.
+    if (componentData.available && componentData.requirements_met === false) {
+      const unmet = componentData.unmet_requirements || {}
+      const parts = Object.entries(unmet).map(
+        ([dep, info]) => `${dep} ≥ ${info.required} (currently ${info.current ?? 'unknown'})`
+      )
+      pushToast(
+        `Can't update ${componentData.name} yet`,
+        parts.length ? `Needs: ${parts.join(', ')}` : 'Update its dependencies first.'
+      )
+      return
+    }
 
     sseRef.current?.close()
     setUpdatingId(componentData.id)
@@ -279,6 +367,8 @@ const Updates = () => {
 
   return (
     <div className="p-4 md:p-10 h-full flex flex-col gap-6 overflow-y-auto custom-scrollbar">
+
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
 
       <div className="w-full flex justify-between items-end flex-none h-14">
         <div>
