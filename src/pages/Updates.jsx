@@ -330,17 +330,14 @@ const Updates = () => {
 
       const { type, status, pull_percent } = payload
 
-      // Every event goes to the log — use status as the human-readable text.
-      // pull_percent events are frequent layer-by-layer updates; only log
-      // them every 10% to avoid flooding the terminal panel.
-      const logText = status || ''
-      if (pull_percent === undefined || pull_percent % 10 === 0) {
-        appendLog(logText, type)
-      }
-
-      // pull_percent drives the progress bar independently of log frequency.
+      // pull_percent drives the progress bar — that's the right place for
+      // "Downloading" byte-progress to live, not the terminal log, which
+      // would otherwise repeat the same "Downloading" text at every
+      // throttled percent tick alongside the bar already showing it.
       if (pull_percent !== undefined) {
         setPullPct(pull_percent)
+      } else {
+        appendLog(status || '', type)
       }
 
       if (type === 'success') {
