@@ -34,6 +34,7 @@ router = APIRouter(prefix="/api/system", tags=["updates"])
 # safely stream its own update the way the other containers do (see that
 # branch's comments).
 CONTAINER_UPDATE_COMPONENTS = {"lva-portal", "lva", "lva-audio", "lva-cli"}
+GHCR_BASE="aryanhasgithub"
 
 
 def _sse(payload: dict) -> str:
@@ -96,10 +97,10 @@ async def _get_os_status() -> dict:
         return {
             "id": "os",
             "name": "LVA OS",
-            "repo": "aryanhasgithub/lva-os",
+            "repo": f"{GHCR_BASE}/lva-os",
             "tag": data.get("tag", "unknown"),
             "notes": (
-                get_release_notes("aryanhasgithub/lva-os")
+                get_release_notes(f"{GHCR_BASE}/lva-os")
                 if data.get("update_available", False)
                 else ""
             ),
@@ -116,7 +117,7 @@ async def _get_os_status() -> dict:
         return {
             "id": "os",
             "name": "LVA OS",
-            "repo": "aryanhasgithub/lva-os",
+            "repo": f"{GHCR_BASE}/lva-os",
             "available": False,
             "tag": "unknown",
             "notes": "",
@@ -142,21 +143,21 @@ async def check_updates():
 
     portal, core, audio, cli, supervisor, os_status = await asyncio.gather(
         _get_container_status(
-            "lva-portal", "LVA Portal", "aryanhasgithub/lva-portal", versions
+            "lva-portal", "LVA Portal", f"{GHCR_BASE}/lva-portal", versions
         ),
         _get_container_status(
-            "lva", "LVA Core", "OHF-Voice/linux-voice-assistant", versions
+            "lva", "LVA Core", "OHF-Voice/linux-voice-assistant", versions # OHF controlled
         ),
         _get_container_status(
-            "lva-audio", "LVA Audio", "aryanhasgithub/lva-audio", versions
+            "lva-audio", "LVA Audio", f"{GHCR_BASE}/lva-audio", versions
         ),
         _get_container_status(
-            "lva-cli", "LVA CLI", "aryanhasgithub/lva-cli", versions
+            "lva-cli", "LVA CLI", f"{GHCR_BASE}/lva-cli", versions
         ),
         _get_container_status(
             "lva-supervisor",
             "LVA Supervisor",
-            "aryanhasgithub/lva-supervisor",
+            f"{GHCR_BASE}/lva-supervisor",
             versions,
         ),
         _get_os_status(),
