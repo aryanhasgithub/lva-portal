@@ -2,24 +2,40 @@
   "general": [
     { "key": "NAME", "label": "Client Name", "type": "string", "default": "speaker_livingroom" },
     { "key": "PORT", "label": "API Port", "type": "number", "default": "6053" },
+    { "key": "HOST", "label": "Bind Address", "type": "string", "default": "" },
+    { "key": "NETWORK_INTERFACE", "label": "Network Interface", "type": "string", "default": "" },
     { "key": "ENABLE_DEBUG", "label": "Debug Mode", "type": "bool", "default": "0" },
+    { "key": "COLORED_DEBUG", "label": "Colored Debug Output", "type": "bool", "default": "0" },
     { "key": "ENABLE_OUTPUT_ONLY", "label": "Output Only Mode", "type": "bool", "default": "0" },
-    { "key": "MIC_AUTO_GAIN", "label": "Mic Auto Gain", "type": "range", "min": 0, "max": 31, "default": "0" },
-    { "key": "MIC_NOISE_SUPPRESSION", "label": "Mic Noise Suppress", "type": "range", "min": 0, "max": 4, "default": "0" },
     { "key": "WAKE_MODEL", "label": "Wake Word Model", "type": "string", "default": "okay_nabu" },
     { "key": "STOP_MODEL", "label": "Stop Word Model", "type": "string", "default": "stop" },
     { "key": "WAKE_WORD_DIR", "label": "Wake Word Path", "type": "string", "default": "app/wakewords" },
-    { "key": "ENABLE_THINKING_SOUND", "label": "Thinking Sound", "type": "bool", "default": "1" },
-    { "key": "REFRACTORY_SECONDS", "label": "Refactory Delay (s)", "type": "number", "default": "2" },
+    { "key": "DOWNLOAD_DIR", "label": "Download Path", "type": "string", "default": "local/" },
+    { "key": "REFRACTORY_SECONDS", "label": "Refractory Delay (s)", "type": "number", "default": "2" },
+    { "key": "CONTINUE_CONVERSATION_DELAY", "label": "Continue Conversation Delay (s)", "type": "number", "default": "0.5" },
+    { "key": "LISTEN_DURING_WAKE_SOUND", "label": "Listen During Wake Sound", "type": "bool", "default": "0" },
+    { "key": "ENABLE_THINKING_SOUND", "label": "Thinking Sound", "type": "bool", "default": "0" },
     { "key": "TIMER_MAX_RING_SECONDS", "label": "Max Ring Time (s)", "type": "number", "default": "900" },
     { "key": "WAKEUP_SOUND", "label": "Wake Sound", "type": "string", "default": "sounds/wake_word_triggered.flac" },
+    { "key": "START_LISTENING_SOUND", "label": "Start Listening Sound", "type": "string", "default": "sounds/start_listening_button.flac" },
     { "key": "PROCESSING_SOUND", "label": "Processing Sound", "type": "string", "default": "sounds/processing.wav" },
     { "key": "TIMER_FINISHED_SOUND", "label": "Timer Sound", "type": "string", "default": "sounds/timer_finished.flac" },
     { "key": "MUTE_SOUND", "label": "Mute Sound", "type": "string", "default": "sounds/mute_switch_on.flac" },
-    { "key": "UNMUTE_SOUND", "label": "Unmute Sound", "type": "string", "default": "sounds/mute_switch_off.flac" }
+    { "key": "UNMUTE_SOUND", "label": "Unmute Sound", "type": "string", "default": "sounds/mute_switch_off.flac" },
+    { "key": "PREFERENCES_FILE", "label": "Preferences File", "type": "string", "default": "preferences.json" },
+    { "key": "PERIPHERAL_HOST", "label": "Peripheral API Host", "type": "string", "default": "0.0.0.0" },
+    { "key": "PERIPHERAL_PORT", "label": "Peripheral API Port", "type": "number", "default": "6055" },
+    { "key": "PERIPHERAL_VOLUME_STEP", "label": "Peripheral Volume Step", "type": "range", "min": 0, "max": 1, "step": 0.05, "default": "0.1" },
+    { "key": "DISABLE_PERIPHERAL_API", "label": "Disable Peripheral API", "type": "bool", "default": "0" }
   ],
   "audio": [
     { "key": "AUDIO_INPUT_DEVICE", "label": "Input Device", "type": "list", "options": [], "default": "default" },
-    { "key": "AUDIO_OUTPUT_DEVICE", "label": "Output Device", "type": "list", "options": [], "default": "default" }
+    { "key": "AUDIO_OUTPUT_DEVICE", "label": "Output Device", "type": "list", "options": [], "default": "default" },
+    { "key": "MUSIC_OUTPUT_DEVICE", "label": "Music Output Device", "type": "list", "options": [], "default": "default" },
+    { "key": "AUDIO_INPUT_BLOCK_SIZE", "label": "Input Block Size", "type": "number", "default": "1024" },
+    { "key": "AUDIO_INPUT_CHANNELS", "label": "Input Channels", "type": "list", "options": ["1", "2"], "default": "2" },
+    { "key": "MIC_VOLUME", "label": "Mic Volume", "type": "range", "min": 0, "max": 100, "default": "100" },
+    { "key": "MIC_AUTO_GAIN", "label": "Mic Auto Gain", "type": "range", "min": 0, "max": 31, "default": "0" },
+    { "key": "MIC_NOISE_SUPPRESSION", "label": "Mic Noise Suppress", "type": "range", "min": 0, "max": 4, "default": "0" }
   ]
 }

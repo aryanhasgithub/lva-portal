@@ -15,6 +15,12 @@ MASTER_ENV_PATH = Path("/etc/lva/master.env")
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
+# Keys whose "default" should be resolved against live audio hardware
+# rather than the static value in config_schema.json.
+INPUT_DEVICE_KEYS = {"AUDIO_INPUT_DEVICE"}
+OUTPUT_DEVICE_KEYS = {"AUDIO_OUTPUT_DEVICE", "MUSIC_OUTPUT_DEVICE"}
+DEVICE_KEYS = INPUT_DEVICE_KEYS | OUTPUT_DEVICE_KEYS
+
 
 def parse_env_file(path: Path) -> dict[str, str]:
     """Reads an .env file and returns a key-value dict, stripping quotes."""
@@ -67,22 +73,22 @@ def seed_env_defaults() -> None:
         for fields in schema.values():
             for field in fields:
                 key = field["key"]
-                
+
                 # Check if key is completely missing or stuck on a placeholder string
                 is_missing = key not in current
                 is_placeholder = current.get(key) in ["default", "", "None"]
 
-                if is_missing or (key in ["AUDIO_INPUT_DEVICE", "AUDIO_OUTPUT_DEVICE"] and is_placeholder):
-                    if key == "AUDIO_INPUT_DEVICE":
+                if is_missing or (key in DEVICE_KEYS and is_placeholder):
+                    if key in INPUT_DEVICE_KEYS:
                         default = detected_input
-                    elif key == "AUDIO_OUTPUT_DEVICE":
+                    elif key in OUTPUT_DEVICE_KEYS:
                         default = detected_output
                     else:
                         default = field.get("default", "")
 
                     if isinstance(default, bool):
                         default = "1" if default else "0"
-                    
+
                     # Update our working dictionary copies
                     current[key] = str(default)
                     missing[key] = str(default)
@@ -129,9 +135,9 @@ async def get_config_schema():
 
         for fields in schema.values():
             for field in fields:
-                if field["key"] == "AUDIO_INPUT_DEVICE":
+                if field["key"] in INPUT_DEVICE_KEYS:
                     field["options"] = audio_inputs
-                if field["key"] == "AUDIO_OUTPUT_DEVICE":
+                if field["key"] in OUTPUT_DEVICE_KEYS:
                     field["options"] = audio_outputs
                 if field["key"] in current_values:
                     field["default"] = current_values[field["key"]]

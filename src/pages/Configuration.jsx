@@ -18,10 +18,10 @@ const Toggle = ({ value, onChange }) => {
   )
 }
 
-const Range = ({ value, min, max, onChange }) => (
+const Range = ({ value, min, max, step, onChange }) => (
   <div className="flex items-center gap-3 w-full">
     <input
-      type="range" min={min} max={max} value={value || min}
+      type="range" min={min} max={max} step={step || 1} value={value || min}
       onChange={(e) => onChange(e.target.value)}
       className="w-full h-2 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary"
     />
@@ -63,7 +63,7 @@ const ConfigSection = ({ fields, data, onChange }) => (
         </div>
         <div className={`${field.type === 'range' ? 'w-52' : 'w-48'} shrink-0 flex justify-end`}>
           {field.type === 'bool' && <Toggle value={data[field.key]} onChange={(val) => onChange(field.key, val)} />}
-          {field.type === 'range' && <Range value={data[field.key]} min={field.min} max={field.max} onChange={(val) => onChange(field.key, val)} />}
+          {field.type === 'range' && <Range value={data[field.key]} min={field.min} max={field.max} step={field.step} onChange={(val) => onChange(field.key, val)} />}
           {field.type === 'list' && <Select value={data[field.key]} options={field.options || []} onChange={(val) => onChange(field.key, val)} />}
           {(field.type === 'string' || field.type === 'number') && <Input type={field.type} value={data[field.key]} onChange={(val) => onChange(field.key, val)} />}
         </div>
