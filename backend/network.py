@@ -134,3 +134,63 @@ async def set_ip(body: dict):
     except Exception as err:  # pylint: disable=broad-exception-caught
         _LOGGER.warning("network/ip unavailable: %s", err)
         return {"error": "Supervisor unavailable"}
+
+
+# =============================================================================
+# WiFi — scan / connect / disconnect (proxies straight through to supervisor)
+# =============================================================================
+
+
+@router.get("/wifi/scan")
+async def wifi_scan(interface: str):
+    """Scan for WiFi networks on an interface.
+
+    Passes through the supervisor's scan result list as-is — each entry
+    already includes ssid, bssid, strength, frequency, secured, security,
+    and key_mgmt. key_mgmt should be sent back unmodified in /wifi/connect.
+    """
+    interface = (interface or "").strip()
+    if not interface:
+        return {"error": "'interface' query param is required"}
+    try:
+        return await supervisor_get(f"/network/wifi/scan?interface={interface}")
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        _LOGGER.warning("network/wifi/scan unavailable: %s", err)
+        return {"error": "Supervisor unavailable"}
+
+
+@router.post("/wifi/connect")
+async def wifi_connect(body: dict):
+    """Connect to a WiFi network.
+
+    Body: { "interface": "wlan0", "ssid": "...", "password": "...",
+             "key_mgmt": "..." }  — key_mgmt/password optional depending
+    on the network's security type (see /wifi/scan result for the target AP).
+    """
+    interface = body.get("interface", "").strip()
+    ssid = body.get("ssid", "").strip()
+    if not interface:
+        return {"error": "'interface' is required"}
+    if not ssid:
+        return {"error": "'ssid' is required"}
+    try:
+        return await supervisor_post("/network/wifi/connect", json=body)
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        _LOGGER.warning("network/wifi/connect unavailable: %s", err)
+        return {"error": "Supervisor unavailable"}
+
+
+@router.post("/wifi/disconnect")
+async def wifi_disconnect(body: dict):
+    """Disconnect the active WiFi connection on an interface.
+
+    Body: { "interface": "wlan0" }
+    """
+    interface = body.get("interface", "").strip()
+    if not interface:
+        return {"error": "'interface' is required"}
+    try:
+        return await supervisor_post("/network/wifi/disconnect", json=body)
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        _LOGGER.warning("network/wifi/disconnect unavailable: %s", err)
+        return {"error": "Supervisor unavailable"}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000/api" : "/api"
 
@@ -30,6 +30,259 @@ const SectionHeader = ({ icon, title }) => (
   </div>
 )
 
+// --- WiFi security label/icon helpers -------------------------------------
+
+const SECURITY_LABELS = {
+  open: "Open",
+  wep: "WEP",
+  "wpa-psk": "WPA",
+  "wpa2-psk": "WPA2",
+  "wpa2-wpa3-personal": "WPA2/WPA3",
+  "wpa3-sae": "WPA3",
+  "wpa-enterprise": "Enterprise",
+  owe: "Enhanced Open",
+  unknown: "Secured",
+}
+
+const securityLabel = (security) => SECURITY_LABELS[security] || "Secured"
+
+// Enterprise (802.1x/EAP) networks aren't supported by the backend's
+// wifi_connect() — no field to collect identity/cert data — so the UI
+// disables selecting them rather than letting the user hit a submit error.
+const isConnectable = (security) => security !== "wpa-enterprise"
+
+const signalIcon = (strength) => {
+  if (strength >= 70) return "wifi"
+  if (strength >= 40) return "wifi_2_bar"
+  return "wifi_1_bar"
+}
+
+// --- WiFi scan/connect modal ------------------------------------------------
+
+const WifiModal = ({ wifiInterface, hostname, onClose, onConnected }) => {
+  const [scanning, setScanning] = useState(true)
+  const [networks, setNetworks] = useState([])
+  const [scanError, setScanError] = useState(null)
+  const [selectedAp, setSelectedAp] = useState(null)
+  const [password, setPassword] = useState("")
+  const [connecting, setConnecting] = useState(false)
+  const [connectError, setConnectError] = useState(null)
+  const [connectStarted, setConnectStarted] = useState(false)
+
+  const runScan = async () => {
+    setScanning(true)
+    setScanError(null)
+    try {
+      const res = await fetch(`${API_BASE}/network/wifi/scan?interface=${encodeURIComponent(wifiInterface)}`)
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || "Scan failed")
+      // De-dupe repeated SSIDs from multiple APs, keep the strongest signal
+      const bySsid = new Map()
+      for (const ap of Array.isArray(data) ? data : []) {
+        if (!ap.ssid) continue
+        const existing = bySsid.get(ap.ssid)
+        if (!existing || ap.strength > existing.strength) bySsid.set(ap.ssid, ap)
+      }
+      setNetworks([...bySsid.values()].sort((a, b) => b.strength - a.strength))
+    } catch (e) {
+      setScanError(e.message || "Could not scan for networks")
+      setNetworks([])
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  useEffect(() => { runScan() }, [])
+
+  const handleSelect = (ap) => {
+    if (!isConnectable(ap.security)) return
+    setSelectedAp(ap)
+    setPassword("")
+    setConnectError(null)
+  }
+
+  const handleConnect = async () => {
+    if (!selectedAp) return
+    setConnecting(true)
+    setConnectError(null)
+    try {
+      const res = await fetch(`${API_BASE}/network/wifi/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          interface: wifiInterface,
+          ssid: selectedAp.ssid,
+          password: selectedAp.security === "open" ? undefined : (password || undefined),
+          key_mgmt: selectedAp.key_mgmt,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data.error) throw new Error(data.error || "Connect failed")
+      setConnectStarted(true)
+      onConnected?.()
+    } catch (e) {
+      // If this device is itself served over the WiFi interface being
+      // reconfigured, the request may never come back at all — a network
+      // error here is expected, not necessarily a failure. Show the
+      // reconnect message either way rather than a hard error.
+      if (e.message && e.message !== "Failed to fetch") {
+        setConnectError(e.message)
+      } else {
+        setConnectStarted(true)
+      }
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim/60" onClick={onClose}>
+      <div
+        className="w-full max-w-lg max-h-[85vh] bg-surface-container rounded-3xl border border-outline-variant shadow-lg flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="h-14 bg-surface-container-high px-6 flex items-center justify-between border-b border-outline-variant/50 shrink-0">
+          <div className="flex items-center">
+            <span className="material-symbols-outlined text-primary mr-3">wifi</span>
+            <p className="text-on-surface font-bold text-lg">Change WiFi</p>
+          </div>
+          <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        {connectStarted ? (
+          <div className="p-6 flex flex-col gap-4 items-center text-center">
+            <span className="material-symbols-outlined text-4xl text-primary">wifi_tethering</span>
+            <p className="text-on-surface font-bold">Connecting to {selectedAp?.ssid}…</p>
+            <p className="text-on-surface-variant text-sm">
+              This may take a few seconds. If you're currently viewing this page over WiFi,
+              this session may disconnect during the switch.
+            </p>
+            <p className="text-on-surface-variant text-sm">
+              If it does, reconnect at{" "}
+              <span className="font-mono text-primary">http://{hostname || "lva"}.local:8000</span>
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-2 h-10 px-6 rounded-full font-bold bg-primary text-on-primary hover:shadow-md active:scale-95"
+            >
+              Close
+            </button>
+          </div>
+        ) : selectedAp ? (
+          <div className="p-6 flex flex-col gap-4">
+            <button
+              onClick={() => setSelectedAp(null)}
+              className="self-start flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary"
+            >
+              <span className="material-symbols-outlined text-base">arrow_back</span>
+              Back to networks
+            </button>
+
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-container-highest border border-outline-variant/50">
+              <span className="material-symbols-outlined text-primary">{signalIcon(selectedAp.strength)}</span>
+              <div className="flex flex-col min-w-0">
+                <span className="font-bold text-on-surface truncate">{selectedAp.ssid}</span>
+                <span className="text-xs text-on-surface-variant">{securityLabel(selectedAp.security)}</span>
+              </div>
+            </div>
+
+            {selectedAp.security !== "open" && (
+              <div className="flex flex-col gap-2">
+                <label className="text-sm text-on-surface-variant">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleConnect()}
+                  placeholder="Network password"
+                  autoFocus
+                  className="h-10 px-4 bg-surface-container-highest text-on-surface rounded-xl outline-none focus:ring-2 focus:ring-primary font-mono text-sm placeholder:text-on-surface-variant/40"
+                />
+              </div>
+            )}
+
+            <div className="bg-secondary-container/20 px-4 py-3 rounded-xl border border-secondary-container/40">
+              <p className="text-xs text-on-surface-variant">
+                If you're viewing this page over WiFi, switching networks may drop this
+                session. You can reconnect at{" "}
+                <span className="font-mono text-primary">http://{hostname || "lva"}.local:8000</span> once
+                the new connection is up.
+              </p>
+            </div>
+
+            {connectError && (
+              <p className="text-sm text-error">{connectError}</p>
+            )}
+
+            <button
+              onClick={handleConnect}
+              disabled={connecting || (selectedAp.security !== "open" && !password)}
+              className={`h-10 px-6 rounded-full font-bold flex items-center justify-center gap-2 self-end transition-all
+                ${connecting
+                  ? "bg-primary/80 text-on-primary cursor-wait"
+                  : "bg-primary text-on-primary hover:shadow-md active:scale-95 disabled:opacity-50"}`}
+            >
+              {connecting && <span className="material-symbols-outlined text-lg animate-spin">sync</span>}
+              {connecting ? "Connecting…" : "Connect"}
+            </button>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 custom-scrollbar">
+            <div className="flex justify-end px-2 pt-1">
+              <button
+                onClick={runScan}
+                disabled={scanning}
+                className="text-xs font-bold text-primary flex items-center gap-1 disabled:opacity-50"
+              >
+                <span className={`material-symbols-outlined text-base ${scanning ? "animate-spin" : ""}`}>refresh</span>
+                Rescan
+              </button>
+            </div>
+
+            {scanning && (
+              <p className="text-on-surface-variant text-sm p-4 text-center">Scanning for networks…</p>
+            )}
+            {!scanning && scanError && (
+              <p className="text-error text-sm p-4 text-center">{scanError}</p>
+            )}
+            {!scanning && !scanError && networks.length === 0 && (
+              <p className="text-on-surface-variant text-sm p-4 text-center">No networks found</p>
+            )}
+
+            {!scanning && networks.map(ap => {
+              const connectable = isConnectable(ap.security)
+              return (
+                <button
+                  key={ap.bssid || ap.ssid}
+                  onClick={() => handleSelect(ap)}
+                  disabled={!connectable}
+                  className={`w-full text-left px-4 py-3 rounded-2xl flex items-center gap-3 transition-all border border-transparent
+                    ${connectable ? "hover:bg-surface-container-high" : "opacity-50 cursor-not-allowed"}`}
+                >
+                  <span className="material-symbols-outlined text-xl text-on-surface-variant">
+                    {signalIcon(ap.strength)}
+                  </span>
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <span className="font-bold text-sm text-on-surface truncate">{ap.ssid}</span>
+                    <span className="text-xs text-on-surface-variant">
+                      {securityLabel(ap.security)}{!connectable ? " — not supported" : ""}
+                    </span>
+                  </div>
+                  {ap.security !== "open" && (
+                    <span className="material-symbols-outlined text-base text-on-surface-variant">lock</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const Network = () => {
   const [loading, setLoading] = useState(true)
   const [devices, setDevices] = useState([])
@@ -41,6 +294,7 @@ const Network = () => {
   const [ipSaving, setIpSaving] = useState(false)
   const [statusText, setStatusText] = useState("Apply")
   const [hostStatusText, setHostStatusText] = useState("Set")
+  const [wifiModalOpen, setWifiModalOpen] = useState(false)
 
   const load = async () => {
     try {
@@ -66,6 +320,33 @@ const Network = () => {
   // gateway/dns/mac flattened onto each device, so no second request
   // or nested found.ip4.* lookup is needed here.
   const detail = devices.find(d => d.interface === selected) || null
+  const wifiDevice = devices.find(d => d.type === "wifi") || null
+
+  // Keep the IP config form scoped to whichever interface is actually
+  // selected. Previously ipForm was one shared piece of state that never
+  // reset on interface change, so switching from eth0 to wlan0 kept
+  // showing (and could submit) eth0's last-edited values against wlan0.
+  // Note: the backend doesn't currently report whether an interface's
+  // current address came from DHCP or a static assignment, so this always
+  // resets the method to "dhcp" on interface change — it prefills the
+  // address/prefix/gateway/dns fields from that interface's live state,
+  // but can't know to pre-select "static" for an interface that's actually
+  // statically configured. Worth adding a "method" field to the supervisor's
+  // device info if that distinction becomes important in the UI.
+  const prevSelected = useRef(null)
+  useEffect(() => {
+    if (selected && selected !== prevSelected.current) {
+      prevSelected.current = selected
+      const d = devices.find(dev => dev.interface === selected)
+      setIpForm({
+        method: "dhcp",
+        address: d?.address || "",
+        prefix: d?.prefix ? String(d.prefix) : "24",
+        gateway: d?.gateway || "",
+        dns: Array.isArray(d?.dns) && d.dns.length ? d.dns.join(", ") : "1.1.1.1, 8.8.8.8",
+      })
+    }
+  }, [selected, devices])
 
   const handleHostname = async () => {
     if (!newHostname.trim()) return
@@ -140,6 +421,23 @@ const Network = () => {
           Refresh
         </button>
       </div>
+
+      {/* Change WiFi — full-width row */}
+      {wifiDevice && (
+        <button
+          onClick={() => setWifiModalOpen(true)}
+          className="w-full bg-surface-container rounded-3xl border border-outline-variant flex items-center gap-4 px-6 py-4 shadow-sm hover:border-primary/40 transition-all active:scale-[0.99] shrink-0"
+        >
+          <span className="material-symbols-outlined text-2xl text-primary">wifi</span>
+          <div className="flex flex-col flex-1 min-w-0 text-left">
+            <span className="font-bold text-on-surface">Change WiFi</span>
+            <span className="text-xs text-on-surface-variant">
+              {wifiDevice.state === "activated" ? "Connected" : "Not connected"} · {wifiDevice.interface}
+            </span>
+          </div>
+          <span className="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+        </button>
+      )}
 
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -293,6 +591,21 @@ const Network = () => {
 
         </div>
       </div>
+
+      {wifiModalOpen && wifiDevice && (
+        <WifiModal
+          wifiInterface={wifiDevice.interface}
+          hostname={hostname}
+          onClose={() => setWifiModalOpen(false)}
+          onConnected={() => {
+            // Don't auto-refresh /network/info immediately — if this session
+            // is riding the interface being reconfigured, the request may
+            // hang until the switch settles or fail outright. Let the user
+            // close the modal and hit the manual Refresh button once things
+            // have stabilized.
+          }}
+        />
+      )}
     </div>
   )
 }
