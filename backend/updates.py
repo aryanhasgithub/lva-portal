@@ -16,6 +16,8 @@ The JSX expects:
 
 import asyncio
 import json
+import logging
+import traceback
 from typing import AsyncGenerator
 
 from fastapi import APIRouter
@@ -25,6 +27,17 @@ import urllib.request
 from supervisor_client import supervisor_get, supervisor_post
 
 router = APIRouter(prefix="/api/system", tags=["updates"])
+log = logging.getLogger("uvicorn.error")
+
+# /system/os-update blocks server-side until RAUC finishes (download + install
+# + verify), with no bytes on the wire in the meantime. The default 60s client
+# timeout kills it mid-install, so give it a generous ceiling.
+OS_UPDATE_TIMEOUT = 900
+
+
+def _err_text(err: BaseException) -> str:
+    """Non-empty error text. httpx timeouts stringify to ''."""
+    return str(err) or repr(err)
 
 # Components proxied through the supervisor's generic per-container SSE
 # update route (GET /containers/{name}/update/stream). "lva-supervisor"
@@ -214,20 +227,24 @@ async def trigger_update_stream(component: str):
                     "status": "Downloading bundle and handing to RAUC — this may take a few minutes...",
                 })
 
-                # /system/os-update blocks server-side for up to 10 minutes
+                # /system/os-update blocks server-side for several minutes
                 # with no progress reporting of its own (a single RAUC
                 # install() call, no percent/streaming). Run it as a
                 # background task and emit periodic heartbeats so the SSE
                 # connection doesn't look dead for the whole duration.
                 install_task = asyncio.ensure_future(
                     supervisor_post(
-                        "/system/os-update", json={"bundle_url": os_info["bundle_url"]}
+                        "/system/os-update",
+                        timeout=OS_UPDATE_TIMEOUT,
+                        json={"bundle_url": os_info["bundle_url"]},
                     )
                 )
 
                 elapsed = 0
-                while not install_task.done():
-                    await asyncio.sleep(30)
+                while True:
+                    done, _ = await asyncio.wait({install_task}, timeout=30)
+                    if done:
+                        break
                     elapsed += 30
                     yield _sse({
                         "type": "log",
@@ -253,11 +270,12 @@ async def trigger_update_stream(component: str):
                     # The install itself succeeded — a failed reboot call
                     # just means the user needs to reboot manually, not
                     # that the update failed.
+                    log.error("OS update: reboot call failed: %r", err)
                     yield _sse({
                         "type": "success",
                         "status": (
                             "Update installed, but the automatic reboot "
-                            f"could not be triggered ({err}). Please reboot manually."
+                            f"could not be triggered ({_err_text(err)}). Please reboot manually."
                         ),
                     })
                     return
@@ -281,7 +299,10 @@ async def trigger_update_stream(component: str):
                     "status": "Update installed. Rebooting to apply — the device will be back shortly.",
                 })
             except Exception as err:  # pylint: disable=broad-exception-caught
-                yield _sse({"type": "error", "status": str(err)})
+                log.error(
+                    "OS update stream failed: %r\n%s", err, traceback.format_exc()
+                )
+                yield _sse({"type": "error", "status": _err_text(err)})
             return
 
         # ── Supervisor self-update — dedicated non-streaming path ────────────
@@ -305,7 +326,10 @@ async def trigger_update_stream(component: str):
                         "status": result.get("error", "Failed to start supervisor update."),
                     })
             except Exception as err:  # pylint: disable=broad-exception-caught
-                yield _sse({"type": "error", "status": str(err)})
+                log.error(
+                    "Supervisor self-update failed: %r\n%s", err, traceback.format_exc()
+                )
+                yield _sse({"type": "error", "status": _err_text(err)})
             return
 
         # ── Unknown / unsupported component ───────────────────────────────
@@ -345,7 +369,11 @@ async def trigger_update_stream(component: str):
                             yield _sse({"type": "log", "status": raw_line})
 
         except Exception as err:  # pylint: disable=broad-exception-caught
-            yield _sse({"type": "error", "status": str(err)})
+            log.error(
+                "Container update (%s) failed: %r\n%s",
+                component, err, traceback.format_exc(),
+            )
+            yield _sse({"type": "error", "status": _err_text(err)})
 
     return StreamingResponse(
         _stream(),

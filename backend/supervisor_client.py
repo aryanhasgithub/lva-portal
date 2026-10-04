@@ -19,13 +19,21 @@ SUPERVISOR_SOCK = "/run/lva/supervisor.sock"
 SUPERVISOR_BASE = "http://supervisor"
 
 
-def _client() -> httpx.AsyncClient:
-    """Return a new httpx client connected to the supervisor unix socket."""
+DEFAULT_TIMEOUT = 60.0
+
+
+def _client(timeout: float | None = DEFAULT_TIMEOUT) -> httpx.AsyncClient:
+    """Return a new httpx client connected to the supervisor unix socket.
+
+    ``timeout`` is applied to connect/read/write/pool. Pass a larger value
+    (or None) for endpoints that block server-side for a long time with no
+    bytes on the wire, e.g. /system/os-update.
+    """
     transport = httpx.AsyncHTTPTransport(uds=SUPERVISOR_SOCK)
     return httpx.AsyncClient(
         transport=transport,
         base_url=SUPERVISOR_BASE,
-        timeout=60.0,
+        timeout=timeout,
     )
 
 
@@ -53,9 +61,11 @@ async def get_container_state(name: str) -> str:
         return response.json()["state"]
 
 
-async def supervisor_post(path: str, **kwargs) -> dict:
+async def supervisor_post(
+    path: str, timeout: float | None = DEFAULT_TIMEOUT, **kwargs
+) -> dict:
     """POST request to supervisor API."""
-    async with _client() as client:
+    async with _client(timeout) as client:
         response = await client.post(path, **kwargs)
         response.raise_for_status()
         print("[DEBUG] supervisor_post status:", response.status_code, "body:", repr(response.text))
